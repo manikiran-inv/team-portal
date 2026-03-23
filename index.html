@@ -212,30 +212,31 @@
     }
 
     // --- ATTENDANCE FUNCTIONS (NEW LOGIC) ---
+    // --- ATTENDANCE FUNCTIONS (NEW LOGIC) ---
     function renderAttendance(attendance) {
+        // SAFETY CHECK 1: If backend fails to send data, default to an empty array so it doesn't crash
+        if (!attendance) attendance = [];
+
         if (currentRole.toLowerCase() === 'admin') {
-            // ADMIN: Show the master log, hide personal clock
             document.getElementById('user-attendance-view').classList.add('hidden');
             document.getElementById('admin-attendance-view').classList.remove('hidden');
             
             const tbody = document.getElementById('admin-attendance-body'); tbody.innerHTML = '';
-            // Display newest records first
             [...attendance].reverse().forEach(log => {
-                if(!log.timestamp) return; // Skip empty rows
+                if(!log.timestamp) return; 
                 const timeString = new Date(log.timestamp).toLocaleString();
                 const badgeColor = log.action === 'Clock In' ? 'bg-success' : 'bg-danger';
                 tbody.innerHTML += `<tr><td><small>${timeString}</small></td><td>${log.email}</td><td><span class="badge ${badgeColor}">${log.action}</span></td></tr>`;
             });
         } else {
-            // USER: Show personal clock, hide master log
             document.getElementById('admin-attendance-view').classList.add('hidden');
             document.getElementById('user-attendance-view').classList.remove('hidden');
 
             const today = new Date().toDateString();
             
-            // Find all logs for THIS user TODAY
             const myLogsToday = attendance.filter(log => {
-                if(!log.timestamp) return false;
+                // SAFETY CHECK 2: Ensure the log has both a timestamp and an email before checking
+                if(!log.timestamp || !log.email) return false;
                 return log.email.toLowerCase() === currentUser.toLowerCase() && new Date(log.timestamp).toDateString() === today;
             });
 
@@ -246,7 +247,6 @@
             const btnOut = document.getElementById('btn-clock-out');
             const statusText = document.getElementById('attendance-status-text');
 
-            // Button Logic Rules
             if (hasClockedIn && hasClockedOut) {
                 btnIn.disabled = true; btnOut.disabled = true;
                 statusText.innerHTML = `✅ Shift Complete. You clocked out at <span class="fw-bold">${new Date(hasClockedOut.timestamp).toLocaleTimeString()}</span>`;
