@@ -68,9 +68,7 @@
                     
                     <div class="table-responsive">
                         <table class="table table-hover align-middle">
-                            <thead class="table-light">
-                                <tr><th>Task</th><th>Assigned To</th><th>Status</th><th>Action</th></tr>
-                            </thead>
+                            <thead class="table-light"><tr><th>Task</th><th>Assigned To</th><th>Status</th><th>Action</th></tr></thead>
                             <tbody id="tasks-body"></tbody>
                         </table>
                     </div>
@@ -79,14 +77,30 @@
         </div>
 
         <div id="page-attendance" class="page-section hidden">
-            <div class="card border-success">
-                <div class="card-header bg-success text-white">Time Tracking</div>
+            
+            <div id="user-attendance-view" class="card border-success hidden">
+                <div class="card-header bg-success text-white">My Time Tracking</div>
                 <div class="card-body text-center p-5">
-                    <button onclick="clock('Clock In')" class="btn btn-lg btn-outline-success me-3 px-5">🟢 Clock In</button>
-                    <button onclick="clock('Clock Out')" class="btn btn-lg btn-outline-danger px-5">🔴 Clock Out</button>
+                    <h5 id="attendance-status-text" class="mb-4 text-secondary">Checking today's status...</h5>
+                    <button id="btn-clock-in" onclick="clock('Clock In')" class="btn btn-lg btn-success me-3 px-5" disabled>🟢 Clock In</button>
+                    <button id="btn-clock-out" onclick="clock('Clock Out')" class="btn btn-lg btn-danger px-5" disabled>🔴 Clock Out</button>
                     <p id="clock-status" class="mt-4 fw-bold text-success"></p>
                 </div>
             </div>
+
+            <div id="admin-attendance-view" class="card border-info hidden">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <span>Team Attendance Logs</span>
+                    <button onclick="loadData()" class="btn btn-sm btn-light text-info">Refresh Logs</button>
+                </div>
+                <div class="card-body table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead class="table-dark"><tr><th>Date / Time</th><th>User Email</th><th>Action</th></tr></thead>
+                        <tbody id="admin-attendance-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
 
         <div id="page-inventory" class="page-section hidden">
@@ -110,9 +124,7 @@
 
                     <div class="table-responsive">
                         <table class="table table-striped align-middle">
-                            <thead class="table-dark">
-                                <tr><th>Item Name</th><th>Units in Stock</th><th>Status</th></tr>
-                            </thead>
+                            <thead class="table-dark"><tr><th>Item Name</th><th>Units in Stock</th><th>Status</th></tr></thead>
                             <tbody id="inventory-body"></tbody>
                         </table>
                     </div>
@@ -125,9 +137,7 @@
                 <div class="card-header bg-danger text-white">Admin: User Permissions</div>
                 <div class="card-body table-responsive">
                     <table class="table align-middle">
-                        <thead class="table-light">
-                            <tr><th>User Email</th><th>Current Role</th><th>Change Role</th></tr>
-                        </thead>
+                        <thead class="table-light"><tr><th>User Email</th><th>Current Role</th><th>Change Role</th></tr></thead>
                         <tbody id="users-body"></tbody>
                     </table>
                 </div>
@@ -142,8 +152,7 @@
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxioaF1ANQTAL-5pGlgTkeGhCtehC6MERT_noik3tWT-Gw3sgHn-l00nxPrCw1sNUJF/exec';
     // ----------------------------------------------------
 
-    let currentUser = '';
-    let currentRole = '';
+    let currentUser = ''; let currentRole = '';
 
     function showPage(pageName) {
         ['tasks', 'attendance', 'inventory', 'admin'].forEach(p => {
@@ -157,14 +166,11 @@
     async function apiCall(data) {
         try {
             const response = await fetch(SCRIPT_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(data)
             });
             return await response.json();
-        } catch (error) {
-            alert("Connection Error.");
-        }
+        } catch (error) { alert("Connection Error."); }
     }
 
     async function login() {
@@ -176,12 +182,10 @@
         btn.innerText = 'Verifying...'; btn.disabled = true;
         
         const result = await apiCall({ action: 'login', email: email, password: password });
-        
         if (result && result.status === 'success') {
             currentUser = email; currentRole = result.role;
             document.getElementById('user-badge').innerText = `${currentUser} (${currentRole})`;
             
-            // Show Admin Tab only for Admins
             if (currentRole.toLowerCase() === 'admin') {
                 document.getElementById('nav-admin-wrapper').classList.remove('hidden');
             }
@@ -197,21 +201,76 @@
 
     function logout() { location.reload(); }
 
-    async function clock(type) {
-        document.getElementById('clock-status').innerText = 'Processing...';
-        const result = await apiCall({ action: 'clock', email: currentUser, clockType: type });
-        if (result && result.status === 'success') {
-            document.getElementById('clock-status').innerText = `✅ Logged: ${type}`;
-            setTimeout(() => { document.getElementById('clock-status').innerText = ''; }, 3000);
-        }
-    }
-
     async function loadData() {
         const result = await apiCall({ action: 'getData' });
         if (result && result.status === 'success') {
             renderTasks(result.tasks);
             renderInventory(result.inventory);
+            renderAttendance(result.attendance); // NEW
             if (currentRole.toLowerCase() === 'admin') renderUsers(result.users);
+        }
+    }
+
+    // --- ATTENDANCE FUNCTIONS (NEW LOGIC) ---
+    function renderAttendance(attendance) {
+        if (currentRole.toLowerCase() === 'admin') {
+            // ADMIN: Show the master log, hide personal clock
+            document.getElementById('user-attendance-view').classList.add('hidden');
+            document.getElementById('admin-attendance-view').classList.remove('hidden');
+            
+            const tbody = document.getElementById('admin-attendance-body'); tbody.innerHTML = '';
+            // Display newest records first
+            [...attendance].reverse().forEach(log => {
+                if(!log.timestamp) return; // Skip empty rows
+                const timeString = new Date(log.timestamp).toLocaleString();
+                const badgeColor = log.action === 'Clock In' ? 'bg-success' : 'bg-danger';
+                tbody.innerHTML += `<tr><td><small>${timeString}</small></td><td>${log.email}</td><td><span class="badge ${badgeColor}">${log.action}</span></td></tr>`;
+            });
+        } else {
+            // USER: Show personal clock, hide master log
+            document.getElementById('admin-attendance-view').classList.add('hidden');
+            document.getElementById('user-attendance-view').classList.remove('hidden');
+
+            const today = new Date().toDateString();
+            
+            // Find all logs for THIS user TODAY
+            const myLogsToday = attendance.filter(log => {
+                if(!log.timestamp) return false;
+                return log.email.toLowerCase() === currentUser.toLowerCase() && new Date(log.timestamp).toDateString() === today;
+            });
+
+            const hasClockedIn = myLogsToday.find(log => log.action === 'Clock In');
+            const hasClockedOut = myLogsToday.find(log => log.action === 'Clock Out');
+
+            const btnIn = document.getElementById('btn-clock-in');
+            const btnOut = document.getElementById('btn-clock-out');
+            const statusText = document.getElementById('attendance-status-text');
+
+            // Button Logic Rules
+            if (hasClockedIn && hasClockedOut) {
+                btnIn.disabled = true; btnOut.disabled = true;
+                statusText.innerHTML = `✅ Shift Complete. You clocked out at <span class="fw-bold">${new Date(hasClockedOut.timestamp).toLocaleTimeString()}</span>`;
+            } else if (hasClockedIn && !hasClockedOut) {
+                btnIn.disabled = true; btnOut.disabled = false;
+                statusText.innerHTML = `🟢 Currently Clocked In. Started at <span class="fw-bold">${new Date(hasClockedIn.timestamp).toLocaleTimeString()}</span>`;
+            } else {
+                btnIn.disabled = false; btnOut.disabled = true;
+                statusText.innerHTML = `👋 Good morning! Waiting to start shift...`;
+            }
+        }
+    }
+
+    async function clock(type) {
+        // Disable buttons immediately so they can't double-click while waiting
+        document.getElementById('btn-clock-in').disabled = true;
+        document.getElementById('btn-clock-out').disabled = true;
+        document.getElementById('clock-status').innerText = 'Saving to database...';
+
+        const result = await apiCall({ action: 'clock', email: currentUser, clockType: type });
+        if (result && result.status === 'success') {
+            document.getElementById('clock-status').innerText = `✅ Successfully Logged: ${type}`;
+            setTimeout(() => { document.getElementById('clock-status').innerText = ''; }, 3000);
+            loadData(); // This instantly re-evaluates the buttons to lock them properly
         }
     }
 
@@ -251,7 +310,7 @@
     }
 
     async function updateTask(id, status) {
-        if(status) await apiCall({ action: 'updateTask', taskId: id, newStatus: status }); loadData();
+        if(status) { await apiCall({ action: 'updateTask', taskId: id, newStatus: status }); loadData(); }
     }
 
     // --- INVENTORY FUNCTIONS ---
@@ -263,8 +322,7 @@
 
         const res = await apiCall({ action: 'saveInventory', item: item, stock: stock, status: status });
         if (res.status === 'success') {
-            document.getElementById('inv-item').value = '';
-            document.getElementById('inv-stock').value = '';
+            document.getElementById('inv-item').value = ''; document.getElementById('inv-stock').value = '';
             loadData();
         }
     }
@@ -275,8 +333,7 @@
             const isLow = inv.status.toLowerCase().includes('buy');
             tbody.innerHTML += `
                 <tr class="${isLow ? 'table-danger' : ''}">
-                    <td class="fw-bold">${inv.item}</td>
-                    <td>${inv.inStock}</td>
+                    <td class="fw-bold">${inv.item}</td><td>${inv.inStock}</td>
                     <td>${isLow ? '⚠️ Needs Buying' : '✅ Good'}</td>
                 </tr>`;
         });
@@ -286,15 +343,13 @@
     function renderUsers(users) {
         const tbody = document.getElementById('users-body'); tbody.innerHTML = '';
         users.forEach(u => {
+            if(!u.email) return;
             tbody.innerHTML += `
                 <tr>
-                    <td class="fw-bold">${u.email}</td>
-                    <td><span class="badge bg-info text-dark">${u.role}</span></td>
+                    <td class="fw-bold">${u.email}</td><td><span class="badge bg-info text-dark">${u.role}</span></td>
                     <td>
                         <select onchange="updateRole('${u.email}', this.value)" class="form-select form-select-sm" style="max-width:150px;">
-                            <option value="">Change Role...</option>
-                            <option value="Admin">Admin</option>
-                            <option value="User">User</option>
+                            <option value="">Change Role...</option><option value="Admin">Admin</option><option value="User">User</option>
                         </select>
                     </td>
                 </tr>`;
@@ -303,9 +358,8 @@
 
     async function updateRole(email, newRole) {
         if (!newRole) return;
-        if (confirm(`Are you sure you want to make ${email} a ${newRole}?`)) {
-            await apiCall({ action: 'updateRole', targetEmail: email, newRole: newRole });
-            loadData();
+        if (confirm(`Make ${email} a ${newRole}?`)) {
+            await apiCall({ action: 'updateRole', targetEmail: email, newRole: newRole }); loadData();
         }
     }
 </script>
