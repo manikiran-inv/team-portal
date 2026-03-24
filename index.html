@@ -64,9 +64,7 @@
                     <button id="btn-new-project" class="btn btn-primary hidden" onclick="showNewProjectModal()">+ New Project</button>
                 </div>
             </div>
-            
-            <div id="projects-container">
-                </div>
+            <div id="projects-container"></div>
         </div>
 
         <div id="page-attendance" class="page-section hidden">
@@ -79,7 +77,6 @@
                     <p id="clock-status" class="mt-4 fw-bold text-success"></p>
                 </div>
             </div>
-
             <div id="admin-attendance-view" class="card border-info hidden">
                 <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                     <span>Team Attendance Logs</span>
@@ -101,7 +98,10 @@
                 </div>
                 <div class="card-body">
                     <div class="row g-2 align-items-center mb-3 p-3 bg-light rounded">
-                        <div class="col-md-4"><input type="text" id="inv-item" class="form-control form-control-sm" placeholder="Item Name"></div>
+                        <div class="col-md-4">
+                            <input type="text" id="inv-item" list="inventory-datalist" class="form-control form-control-sm" placeholder="Search or Type New Item Name">
+                            <datalist id="inventory-datalist"></datalist>
+                        </div>
                         <div class="col-md-3"><input type="number" id="inv-stock" class="form-control form-control-sm" placeholder="Stock Amount"></div>
                         <div class="col-md-3">
                             <select id="inv-status" class="form-select form-select-sm">
@@ -146,10 +146,8 @@
         <input type="hidden" id="task-project-id">
         <input type="text" id="new-task-name" class="form-control mb-3" placeholder="Task Name">
         <textarea id="new-task-notes" class="form-control mb-3" placeholder="Task Description/Notes" rows="2"></textarea>
-        
         <label class="form-label fw-bold">Assign Users (Multi-Select):</label>
-        <div class="user-checkbox-list" id="user-checkbox-container">
-            </div>
+        <div class="user-checkbox-list" id="user-checkbox-container"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('taskModal')">Cancel</button>
@@ -170,8 +168,7 @@
         <p><strong>Assigned To:</strong> <span id="comment-task-assignees" class="text-primary"></span></p>
         <p><strong>Notes:</strong> <span id="comment-task-notes"></span></p>
         <hr>
-        <div class="chat-box" id="chat-history">
-            </div>
+        <div class="chat-box" id="chat-history"></div>
         <div class="d-flex mt-3">
             <input type="hidden" id="active-comment-task-id">
             <input type="text" id="new-comment-text" class="form-control me-2" placeholder="Type a comment...">
@@ -185,18 +182,16 @@
 <script>
     // --- 🚨 PASTE YOUR GOOGLE APPS SCRIPT URL HERE 🚨 ---
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxioaF1ANQTAL-5pGlgTkeGhCtehC6MERT_noik3tWT-Gw3sgHn-l00nxPrCw1sNUJF/exec';
+    
+    // --- SECURITY SETTINGS ---
+    const OFFICE_LAT = 26.5173436;
+    const OFFICE_LON = 80.2306331;
+    const ALLOWED_DISTANCE = 1000;
+    const OFFICE_IP = "106.214.8.198";
 
-
-
-    const OFFICE_LAT = 26.5173436;       // Replace with your office Latitude
-    const OFFICE_LON = 80.2306331;       // Replace with your office Longitude
-    const ALLOWED_DISTANCE = 1000;     // Allowed distance in meters
-    const OFFICE_IP = "106.214.8.198"; // Replace with your office Public IP
-    // -------------------------
-
-    let currentUser = ''; // Stores Name now
+    let currentUser = ''; 
     let currentRole = '';
-    let globalData = {}; // Cache data to easily open comments
+    let globalData = {}; 
 
     function showPage(pageName) {
         ['projects', 'attendance', 'inventory', 'admin'].forEach(p => {
@@ -225,8 +220,8 @@
         if (!name || !password) return;
 
         document.getElementById('login-btn').innerText = 'Verifying...';
-        
         const result = await apiCall({ action: 'login', name: name, password: password });
+        
         if (result && result.status === 'success') {
             currentUser = result.name; currentRole = result.role;
             document.getElementById('user-badge').innerText = `${currentUser} (${currentRole})`;
@@ -250,7 +245,7 @@
     async function loadData() {
         const result = await apiCall({ action: 'getData' });
         if (result && result.status === 'success') {
-            globalData = result; // Save to global cache
+            globalData = result; 
             renderProjectsAndTasks(result.projects, result.tasks);
             renderInventory(result.inventory);
             renderAttendance(result.attendance); 
@@ -272,20 +267,29 @@
         const container = document.getElementById('projects-container'); container.innerHTML = '';
         const isAdmin = currentRole.toLowerCase() === 'admin';
 
-        projects.forEach(proj => {
-            // Find tasks for this project
-            const projTasks = tasks.filter(t => t.projectId == proj.id);
+        // SORTING: Display newest projects first
+        const sortedProjects = projects.slice().reverse();
+
+        sortedProjects.forEach(proj => {
+            // Find and SORT tasks: Newest tasks first
+            const projTasks = tasks.filter(t => t.projectId == proj.id).reverse();
             
-            // Filter visibility: Admins see all. Users see if assigned to ANY task in project.
             let userTasks = projTasks;
             if (!isAdmin) {
                 userTasks = projTasks.filter(t => t.assignedTo && t.assignedTo.includes(currentUser));
-                if (userTasks.length === 0) return; // Skip rendering project if no tasks assigned to user
+                if (userTasks.length === 0) return; 
             }
+
+            // Only Admins get the delete project button
+            const deleteProjectBtn = isAdmin ? `<button onclick="deleteProject('${proj.id}')" class="btn btn-sm btn-outline-danger me-2">🗑️ Delete Project</button>` : '';
 
             let taskRows = '';
             userTasks.forEach(t => {
                 let bColor = t.status === 'Done' ? 'bg-success' : (t.status === 'Doing' ? 'bg-warning text-dark' : 'bg-secondary');
+                
+                // Only Admins get the delete task button
+                const deleteTaskBtn = isAdmin ? `<button onclick="deleteTask('${t.id}')" class="btn btn-sm btn-outline-danger" title="Delete Task">🗑️</button>` : '';
+
                 taskRows += `
                     <tr>
                         <td width="30%"><strong>${t.name}</strong></td>
@@ -298,6 +302,7 @@
                                     <option value="Doing">Doing</option><option value="Done">Done</option>
                                 </select>
                                 <button onclick="openComments('${t.id}')" class="btn btn-sm btn-outline-primary">💬 Chat</button>
+                                ${deleteTaskBtn}
                             </div>
                         </td>
                     </tr>`;
@@ -307,7 +312,10 @@
                 <div class="card mb-4 border-primary">
                     <div class="card-header bg-white text-primary d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">📁 ${proj.name}</h5>
-                        <button onclick="openTaskModal('${proj.id}')" class="btn btn-sm btn-primary">+ Add Task</button>
+                        <div>
+                            ${deleteProjectBtn}
+                            <button onclick="openTaskModal('${proj.id}')" class="btn btn-sm btn-primary">+ Add Task</button>
+                        </div>
                     </div>
                     <div class="card-body p-0 table-responsive">
                         <table class="table table-hover mb-0 align-middle">
@@ -316,6 +324,21 @@
                     </div>
                 </div>`;
         });
+    }
+
+    // --- DELETION LOGIC ---
+    async function deleteProject(projectId) {
+        if(confirm("⚠️ WARNING: This will permanently delete this Project, ALL its Tasks, and ALL its Comments. Are you sure?")) {
+            await apiCall({ action: 'deleteProject', projectId: projectId });
+            loadData();
+        }
+    }
+
+    async function deleteTask(taskId) {
+        if(confirm("⚠️ Are you sure you want to delete this task and its chat history?")) {
+            await apiCall({ action: 'deleteTask', taskId: taskId });
+            loadData();
+        }
     }
 
     // --- CREATE TASK WITH MULTI-SELECT ---
@@ -332,7 +355,6 @@
 
     function openTaskModal(projId) {
         document.getElementById('task-project-id').value = projId;
-        // Uncheck all boxes
         document.querySelectorAll('.user-check').forEach(chk => chk.checked = false);
         openModal('taskModal');
     }
@@ -342,7 +364,6 @@
         const name = document.getElementById('new-task-name').value;
         const notes = document.getElementById('new-task-notes').value;
         
-        // Get all checked users
         const assignedArray = [];
         document.querySelectorAll('.user-check:checked').forEach(chk => assignedArray.push(chk.value));
         const assignedString = assignedArray.join(', ');
@@ -393,7 +414,7 @@
                 <div class="chat-bubble ${bubbleClass}">${c.text}</div>
             </div>`;
         });
-        chatBox.scrollTop = chatBox.scrollHeight; // Scroll to bottom
+        chatBox.scrollTop = chatBox.scrollHeight; 
     }
 
     async function addComment() {
@@ -407,8 +428,8 @@
         await apiCall({ action: 'addComment', taskId: taskId, author: currentUser, text: text });
         
         textObj.value = ''; textObj.disabled = false;
-        await loadData(); // Reload background data
-        renderChatHistory(taskId); // Update active chat window
+        await loadData(); 
+        renderChatHistory(taskId); 
     }
 
     // --- ADMIN SYSTEM ---
@@ -450,7 +471,13 @@
 
     function renderInventory(inventory) {
         const tbody = document.getElementById('inventory-body'); tbody.innerHTML = '';
+        const datalist = document.getElementById('inventory-datalist'); datalist.innerHTML = '';
+
         inventory.forEach(inv => {
+            // Populate the dropdown datalist natively
+            datalist.innerHTML += `<option value="${inv.item}">`;
+            
+            // Render the table
             const isLow = inv.status.toLowerCase().includes('buy');
             tbody.innerHTML += `<tr class="${isLow ? 'table-danger' : ''}"><td class="fw-bold">${inv.item}</td><td>${inv.inStock}</td><td>${isLow ? '⚠️ Needs Buying' : '✅ Good'}</td></tr>`;
         });
