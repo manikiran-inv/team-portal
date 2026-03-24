@@ -95,7 +95,7 @@
                 </div>
                 <div class="card-body table-responsive">
                     <table class="table table-sm table-striped">
-                        <thead class="table-dark"><tr><th>Date / Time</th><th>User Email</th><th>Action</th></tr></thead>
+                        <thead class="table-dark"><tr><th>Date / Time</th><th>User Email</th><th>Action</th><th>Network IP</th><th>GPS (Lat, Lon)</th></tr></thead>
                         <tbody id="admin-attendance-body"></tbody>
                     </table>
                 </div>
@@ -152,6 +152,13 @@
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxioaF1ANQTAL-5pGlgTkeGhCtehC6MERT_noik3tWT-Gw3sgHn-l00nxPrCw1sNUJF/exec';
     // ----------------------------------------------------
 
+    // --- 🚨 SECURITY SETTINGS: CHANGE THESE TO YOUR OFFICE DETAILS 🚨 ---
+    const OFFICE_LAT = 26.5173436;       // Replace with your office Latitude
+    const OFFICE_LON = 80.2306331;       // Replace with your office Longitude
+    const ALLOWED_DISTANCE = 200;     // Allowed distance in meters
+    const OFFICE_IP = "106.214.8.198"; // Replace with your office Public IP
+    // --------------------------------------------------------------------
+
     let currentUser = ''; let currentRole = '';
 
     function showPage(pageName) {
@@ -206,15 +213,66 @@
         if (result && result.status === 'success') {
             renderTasks(result.tasks);
             renderInventory(result.inventory);
-            renderAttendance(result.attendance); // NEW
+            renderAttendance(result.attendance); 
             if (currentRole.toLowerCase() === 'admin') renderUsers(result.users);
         }
     }
 
-    // --- ATTENDANCE FUNCTIONS (NEW LOGIC) ---
-    // --- ATTENDANCE FUNCTIONS (NEW LOGIC) ---
+    // --- SECURITY VERIFICATION FUNCTIONS ---
+
+    async function checkOfficeWifi() {
+        try {
+            const res = await fetch("https://api.ipify.org?format=json");
+            const data = await res.json();
+            if(data.ip === OFFICE_IP) {
+                return { ok: true, ip: data.ip };
+            } else {
+                alert("Security Alert: Please connect to the office WiFi to mark attendance.");
+                return { ok: false, ip: data.ip };
+            }
+        } catch(err){
+            alert("Network check failed. Make sure you have internet access.");
+            return { ok: false, ip: "Error" };
+        }
+    }
+
+    function getDistance(lat1, lon1, lat2, lon2){
+        const R = 6371e3; // Earth radius in meters
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    function checkOfficeLocation(callback) {
+        if (!navigator.geolocation) {
+            alert("Geolocation is not supported by your browser.");
+            callback(false, null, null);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const distance = getDistance(lat, lon, OFFICE_LAT, OFFICE_LON);
+
+            if(distance <= ALLOWED_DISTANCE){
+                callback(true, lat, lon);
+            } else {
+                alert(`Security Alert: You are ${Math.round(distance)} meters away. You must be at the office to mark attendance.`);
+                callback(false, lat, lon);
+            }
+        }, () => {
+            alert("Location permission required. Please allow location access in your browser settings.");
+            callback(false, null, null);
+        }, { enableHighAccuracy: true });
+    }
+
+    // --- ATTENDANCE FUNCTIONS ---
     function renderAttendance(attendance) {
-        // SAFETY CHECK 1: If backend fails to send data, default to an empty array so it doesn't crash
         if (!attendance) attendance = [];
 
         if (currentRole.toLowerCase() === 'admin') {
@@ -226,16 +284,21 @@
                 if(!log.timestamp) return; 
                 const timeString = new Date(log.timestamp).toLocaleString();
                 const badgeColor = log.action === 'Clock In' ? 'bg-success' : 'bg-danger';
-                tbody.innerHTML += `<tr><td><small>${timeString}</small></td><td>${log.email}</td><td><span class="badge ${badgeColor}">${log.action}</span></td></tr>`;
+                tbody.innerHTML += `
+                    <tr>
+                        <td><small>${timeString}</small></td>
+                        <td class="fw-bold">${log.email}</td>
+                        <td><span class="badge ${badgeColor}">${log.action}</span></td>
+                        <td><small class="text-muted">${log.ip || 'N/A'}</small></td>
+                        <td><small class="text-muted">${log.lat ? log.lat + ', ' + log.lon : 'N/A'}</small></td>
+                    </tr>`;
             });
         } else {
             document.getElementById('admin-attendance-view').classList.add('hidden');
             document.getElementById('user-attendance-view').classList.remove('hidden');
 
             const today = new Date().toDateString();
-            
             const myLogsToday = attendance.filter(log => {
-                // SAFETY CHECK 2: Ensure the log has both a timestamp and an email before checking
                 if(!log.timestamp || !log.email) return false;
                 return log.email.toLowerCase() === currentUser.toLowerCase() && new Date(log.timestamp).toDateString() === today;
             });
@@ -261,17 +324,44 @@
     }
 
     async function clock(type) {
-        // Disable buttons immediately so they can't double-click while waiting
-        document.getElementById('btn-clock-in').disabled = true;
-        document.getElementById('btn-clock-out').disabled = true;
-        document.getElementById('clock-status').innerText = 'Saving to database...';
-
-        const result = await apiCall({ action: 'clock', email: currentUser, clockType: type });
-        if (result && result.status === 'success') {
-            document.getElementById('clock-status').innerText = `✅ Successfully Logged: ${type}`;
-            setTimeout(() => { document.getElementById('clock-status').innerText = ''; }, 3000);
-            loadData(); // This instantly re-evaluates the buttons to lock them properly
+        const statusEl = document.getElementById('clock-status');
+        
+        statusEl.innerText = 'Verifying Network IP...';
+        const networkCheck = await checkOfficeWifi();
+        if (!networkCheck.ok) {
+            statusEl.innerText = '❌ Network Check Failed';
+            return;
         }
+
+        statusEl.innerText = 'Verifying GPS Location...';
+        checkOfficeLocation(async function(locationOK, lat, lon) {
+            if (!locationOK) {
+                statusEl.innerText = '❌ Location Check Failed';
+                return;
+            }
+
+            // Both checks passed, disable buttons and send to DB
+            document.getElementById('btn-clock-in').disabled = true;
+            document.getElementById('btn-clock-out').disabled = true;
+            statusEl.innerText = 'Saving to database...';
+
+            const result = await apiCall({ 
+                action: 'clock', 
+                email: currentUser, 
+                clockType: type,
+                lat: lat,
+                lon: lon,
+                ip: networkCheck.ip 
+            });
+
+            if (result && result.status === 'success') {
+                statusEl.innerText = `✅ Successfully Logged: ${type}`;
+                setTimeout(() => { statusEl.innerText = ''; }, 3000);
+                loadData(); 
+            } else {
+                statusEl.innerText = '❌ Server Error';
+            }
+        });
     }
 
     // --- TASK FUNCTIONS ---
