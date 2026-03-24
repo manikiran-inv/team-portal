@@ -6,15 +6,19 @@
     <title>Enterprise Portal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .hidden { display: none !important; }
         .page-section { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .navbar-brand { font-weight: bold; }
-        .card { border: none; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px;}
-        .card-header { border-radius: 10px 10px 0 0 !important; font-weight: 600; }
+        .card { border: none; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;}
+        .card-header { border-radius: 8px 8px 0 0 !important; font-weight: 600; }
         .login-container { max-width: 400px; margin: 10vh auto; }
-        .mini-form { background: #f1f3f5; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        .chat-box { max-height: 300px; overflow-y: auto; background: #fff; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px; margin-bottom: 15px;}
+        .chat-bubble { padding: 8px 12px; border-radius: 15px; margin-bottom: 10px; display: inline-block; max-width: 85%; }
+        .chat-mine { background: #d1e7dd; margin-left: auto; text-align: right; border-bottom-right-radius: 2px;}
+        .chat-other { background: #f8d7da; border-bottom-left-radius: 2px;}
+        .msg-wrapper { display: flex; flex-direction: column; }
+        .user-checkbox-list { max-height: 150px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 4px; padding: 10px; background: #fff; }
     </style>
 </head>
 <body>
@@ -22,7 +26,7 @@
 <div id="login-screen" class="container login-container">
     <div class="card p-4">
         <h3 class="text-center mb-4 text-primary">System Login</h3>
-        <input type="email" id="email-input" class="form-control mb-3" placeholder="user@company.com">
+        <input type="text" id="name-input" class="form-control mb-3" placeholder="Enter Your Name">
         <input type="password" id="password-input" class="form-control mb-4" placeholder="Password">
         <button onclick="login()" id="login-btn" class="btn btn-primary w-100 py-2">Secure Login</button>
         <p id="login-error" class="text-danger mt-3 text-center fw-bold"></p>
@@ -43,7 +47,7 @@
 
     <div class="container mb-4">
         <ul class="nav nav-pills nav-fill bg-white p-2 rounded shadow-sm" id="nav-menu">
-            <li class="nav-item"><a class="nav-link active" id="tab-tasks" href="#" onclick="showPage('tasks')">Tasks</a></li>
+            <li class="nav-item"><a class="nav-link active" id="tab-projects" href="#" onclick="showPage('projects')">Projects & Tasks</a></li>
             <li class="nav-item"><a class="nav-link" id="tab-attendance" href="#" onclick="showPage('attendance')">Attendance</a></li>
             <li class="nav-item"><a class="nav-link" id="tab-inventory" href="#" onclick="showPage('inventory')">Inventory</a></li>
             <li class="nav-item hidden" id="nav-admin-wrapper"><a class="nav-link text-danger fw-bold" id="tab-admin" href="#" onclick="showPage('admin')">Admin Panel</a></li>
@@ -52,32 +56,20 @@
 
     <div class="container">
         
-        <div id="page-tasks" class="page-section">
-            <div class="card">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <span>Task Management</span>
-                    <button onclick="loadData()" class="btn btn-sm btn-light">Sync Data</button>
-                </div>
-                <div class="card-body">
-                    <div class="mini-form row g-2 align-items-center">
-                        <div class="col-md-3"><input type="text" id="new-task-name" class="form-control form-control-sm" placeholder="Task Name"></div>
-                        <div class="col-md-3"><input type="email" id="new-task-assign" class="form-control form-control-sm" placeholder="Assign to (Email)"></div>
-                        <div class="col-md-4"><input type="text" id="new-task-notes" class="form-control form-control-sm" placeholder="Notes"></div>
-                        <div class="col-md-2"><button onclick="createTask()" class="btn btn-sm btn-success w-100">Add Task</button></div>
-                    </div>
-                    
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead class="table-light"><tr><th>Task</th><th>Assigned To</th><th>Status</th><th>Action</th></tr></thead>
-                            <tbody id="tasks-body"></tbody>
-                        </table>
-                    </div>
+        <div id="page-projects" class="page-section">
+            <div class="d-flex justify-content-between mb-3">
+                <h4>Project Workspace</h4>
+                <div>
+                    <button onclick="loadData()" class="btn btn-light border me-2">🔄 Sync</button>
+                    <button id="btn-new-project" class="btn btn-primary hidden" onclick="showNewProjectModal()">+ New Project</button>
                 </div>
             </div>
+            
+            <div id="projects-container">
+                </div>
         </div>
 
         <div id="page-attendance" class="page-section hidden">
-            
             <div id="user-attendance-view" class="card border-success hidden">
                 <div class="card-header bg-success text-white">My Time Tracking</div>
                 <div class="card-body text-center p-5">
@@ -95,23 +87,21 @@
                 </div>
                 <div class="card-body table-responsive">
                     <table class="table table-sm table-striped">
-                        <thead class="table-dark"><tr><th>Date / Time</th><th>User Email</th><th>Action</th><th>Network IP</th><th>GPS (Lat, Lon)</th></tr></thead>
+                        <thead class="table-dark"><tr><th>Time</th><th>Name</th><th>Action</th><th>Network IP</th><th>GPS (Lat, Lon)</th></tr></thead>
                         <tbody id="admin-attendance-body"></tbody>
                     </table>
                 </div>
             </div>
-
         </div>
 
         <div id="page-inventory" class="page-section hidden">
             <div class="card">
                 <div class="card-header bg-dark text-white d-flex justify-content-between">
                     <span>Inventory Management</span>
-                    <button onclick="loadData()" class="btn btn-sm btn-light">Sync Data</button>
                 </div>
                 <div class="card-body">
-                    <div class="mini-form row g-2 align-items-center">
-                        <div class="col-md-4"><input type="text" id="inv-item" class="form-control form-control-sm" placeholder="Item Name (Exact match to update)"></div>
+                    <div class="row g-2 align-items-center mb-3 p-3 bg-light rounded">
+                        <div class="col-md-4"><input type="text" id="inv-item" class="form-control form-control-sm" placeholder="Item Name"></div>
                         <div class="col-md-3"><input type="number" id="inv-stock" class="form-control form-control-sm" placeholder="Stock Amount"></div>
                         <div class="col-md-3">
                             <select id="inv-status" class="form-select form-select-sm">
@@ -121,7 +111,6 @@
                         </div>
                         <div class="col-md-2"><button onclick="saveInventory()" class="btn btn-sm btn-primary w-100">Save Item</button></div>
                     </div>
-
                     <div class="table-responsive">
                         <table class="table table-striped align-middle">
                             <thead class="table-dark"><tr><th>Item Name</th><th>Units in Stock</th><th>Status</th></tr></thead>
@@ -134,35 +123,83 @@
 
         <div id="page-admin" class="page-section hidden">
             <div class="card border-danger">
-                <div class="card-header bg-danger text-white">Admin: User Permissions</div>
+                <div class="card-header bg-danger text-white">Admin: User Management</div>
                 <div class="card-body table-responsive">
                     <table class="table align-middle">
-                        <thead class="table-light"><tr><th>User Email</th><th>Current Role</th><th>Change Role</th></tr></thead>
+                        <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Role</th><th>Change Role</th></tr></thead>
                         <tbody id="users-body"></tbody>
                     </table>
                 </div>
             </div>
         </div>
-
     </div>
+</div>
+
+<div class="modal" id="taskModal" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title">Assign New Task</h5>
+        <button type="button" class="btn-close" onclick="closeModal('taskModal')"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="task-project-id">
+        <input type="text" id="new-task-name" class="form-control mb-3" placeholder="Task Name">
+        <textarea id="new-task-notes" class="form-control mb-3" placeholder="Task Description/Notes" rows="2"></textarea>
+        
+        <label class="form-label fw-bold">Assign Users (Multi-Select):</label>
+        <div class="user-checkbox-list" id="user-checkbox-container">
+            </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('taskModal')">Cancel</button>
+        <button type="button" class="btn btn-success" onclick="createTask()">Create Task</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="commentsModal" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title" id="comment-task-title">Task Details</h5>
+        <button type="button" class="btn-close btn-close-white" onclick="closeModal('commentsModal')"></button>
+      </div>
+      <div class="modal-body">
+        <p><strong>Assigned To:</strong> <span id="comment-task-assignees" class="text-primary"></span></p>
+        <p><strong>Notes:</strong> <span id="comment-task-notes"></span></p>
+        <hr>
+        <div class="chat-box" id="chat-history">
+            </div>
+        <div class="d-flex mt-3">
+            <input type="hidden" id="active-comment-task-id">
+            <input type="text" id="new-comment-text" class="form-control me-2" placeholder="Type a comment...">
+            <button class="btn btn-primary" onclick="addComment()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
     // --- 🚨 PASTE YOUR GOOGLE APPS SCRIPT URL HERE 🚨 ---
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxioaF1ANQTAL-5pGlgTkeGhCtehC6MERT_noik3tWT-Gw3sgHn-l00nxPrCw1sNUJF/exec';
-    // ----------------------------------------------------
 
-    // --- 🚨 SECURITY SETTINGS: CHANGE THESE TO YOUR OFFICE DETAILS 🚨 ---
+
+
     const OFFICE_LAT = 26.5173436;       // Replace with your office Latitude
     const OFFICE_LON = 80.2306331;       // Replace with your office Longitude
-    const ALLOWED_DISTANCE = 200;     // Allowed distance in meters
+    const ALLOWED_DISTANCE = 1000;     // Allowed distance in meters
     const OFFICE_IP = "106.214.8.198"; // Replace with your office Public IP
-    // --------------------------------------------------------------------
+    // -------------------------
 
-    let currentUser = ''; let currentRole = '';
+    let currentUser = ''; // Stores Name now
+    let currentRole = '';
+    let globalData = {}; // Cache data to easily open comments
 
     function showPage(pageName) {
-        ['tasks', 'attendance', 'inventory', 'admin'].forEach(p => {
+        ['projects', 'attendance', 'inventory', 'admin'].forEach(p => {
             document.getElementById('page-' + p).classList.add('hidden');
             document.getElementById('tab-' + p).classList.remove('active');
         });
@@ -170,40 +207,42 @@
         document.getElementById('tab-' + pageName).classList.add('active');
     }
 
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function openModal(id) { document.getElementById(id).style.display = 'block'; }
+
     async function apiCall(data) {
         try {
             const response = await fetch(SCRIPT_URL, {
-                method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(data)
+                method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(data)
             });
             return await response.json();
         } catch (error) { alert("Connection Error."); }
     }
 
     async function login() {
-        const email = document.getElementById('email-input').value.trim();
+        const name = document.getElementById('name-input').value.trim();
         const password = document.getElementById('password-input').value.trim();
-        if (!email || !password) return;
+        if (!name || !password) return;
 
-        const btn = document.getElementById('login-btn');
-        btn.innerText = 'Verifying...'; btn.disabled = true;
+        document.getElementById('login-btn').innerText = 'Verifying...';
         
-        const result = await apiCall({ action: 'login', email: email, password: password });
+        const result = await apiCall({ action: 'login', name: name, password: password });
         if (result && result.status === 'success') {
-            currentUser = email; currentRole = result.role;
+            currentUser = result.name; currentRole = result.role;
             document.getElementById('user-badge').innerText = `${currentUser} (${currentRole})`;
             
             if (currentRole.toLowerCase() === 'admin') {
                 document.getElementById('nav-admin-wrapper').classList.remove('hidden');
+                document.getElementById('btn-new-project').classList.remove('hidden');
             }
 
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('app-screen').classList.remove('hidden');
-            showPage('tasks'); loadData();
+            showPage('projects'); loadData();
         } else {
-            document.getElementById('login-error').innerText = 'Login Failed';
+            alert('Login Failed');
+            document.getElementById('login-btn').innerText = 'Secure Login';
         }
-        btn.innerText = 'Secure Login'; btn.disabled = false;
     }
 
     function logout() { location.reload(); }
@@ -211,234 +250,179 @@
     async function loadData() {
         const result = await apiCall({ action: 'getData' });
         if (result && result.status === 'success') {
-            renderTasks(result.tasks);
+            globalData = result; // Save to global cache
+            renderProjectsAndTasks(result.projects, result.tasks);
             renderInventory(result.inventory);
             renderAttendance(result.attendance); 
             if (currentRole.toLowerCase() === 'admin') renderUsers(result.users);
+            populateUserCheckboxes(result.users);
         }
     }
 
-    // --- SECURITY VERIFICATION FUNCTIONS ---
-
-    async function checkOfficeWifi() {
-        try {
-            const res = await fetch("https://api.ipify.org?format=json");
-            const data = await res.json();
-            if(data.ip === OFFICE_IP) {
-                return { ok: true, ip: data.ip };
-            } else {
-                alert("Security Alert: Please connect to the office WiFi to mark attendance.");
-                return { ok: false, ip: data.ip };
-            }
-        } catch(err){
-            alert("Network check failed. Make sure you have internet access.");
-            return { ok: false, ip: "Error" };
-        }
-    }
-
-    function getDistance(lat1, lon1, lat2, lon2){
-        const R = 6371e3; // Earth radius in meters
-        const φ1 = lat1 * Math.PI/180;
-        const φ2 = lat2 * Math.PI/180;
-        const Δφ = (lat2-lat1) * Math.PI/180;
-        const Δλ = (lon2-lon1) * Math.PI/180;
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-    }
-
-    function checkOfficeLocation(callback) {
-        if (!navigator.geolocation) {
-            alert("Geolocation is not supported by your browser.");
-            callback(false, null, null);
-            return;
-        }
-
-        navigator.geolocation.getCurrentPosition(function(pos) {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-            const distance = getDistance(lat, lon, OFFICE_LAT, OFFICE_LON);
-
-            if(distance <= ALLOWED_DISTANCE){
-                callback(true, lat, lon);
-            } else {
-                alert(`Security Alert: You are ${Math.round(distance)} meters away. You must be at the office to mark attendance.`);
-                callback(false, lat, lon);
-            }
-        }, () => {
-            alert("Location permission required. Please allow location access in your browser settings.");
-            callback(false, null, null);
-        }, { enableHighAccuracy: true });
-    }
-
-    // --- ATTENDANCE FUNCTIONS ---
-    function renderAttendance(attendance) {
-        if (!attendance) attendance = [];
-
-        if (currentRole.toLowerCase() === 'admin') {
-            document.getElementById('user-attendance-view').classList.add('hidden');
-            document.getElementById('admin-attendance-view').classList.remove('hidden');
-            
-            const tbody = document.getElementById('admin-attendance-body'); tbody.innerHTML = '';
-            [...attendance].reverse().forEach(log => {
-                if(!log.timestamp) return; 
-                const timeString = new Date(log.timestamp).toLocaleString();
-                const badgeColor = log.action === 'Clock In' ? 'bg-success' : 'bg-danger';
-                tbody.innerHTML += `
-                    <tr>
-                        <td><small>${timeString}</small></td>
-                        <td class="fw-bold">${log.email}</td>
-                        <td><span class="badge ${badgeColor}">${log.action}</span></td>
-                        <td><small class="text-muted">${log.ip || 'N/A'}</small></td>
-                        <td><small class="text-muted">${log.lat ? log.lat + ', ' + log.lon : 'N/A'}</small></td>
-                    </tr>`;
-            });
-        } else {
-            document.getElementById('admin-attendance-view').classList.add('hidden');
-            document.getElementById('user-attendance-view').classList.remove('hidden');
-
-            const today = new Date().toDateString();
-            const myLogsToday = attendance.filter(log => {
-                if(!log.timestamp || !log.email) return false;
-                return log.email.toLowerCase() === currentUser.toLowerCase() && new Date(log.timestamp).toDateString() === today;
-            });
-
-            const hasClockedIn = myLogsToday.find(log => log.action === 'Clock In');
-            const hasClockedOut = myLogsToday.find(log => log.action === 'Clock Out');
-
-            const btnIn = document.getElementById('btn-clock-in');
-            const btnOut = document.getElementById('btn-clock-out');
-            const statusText = document.getElementById('attendance-status-text');
-
-            if (hasClockedIn && hasClockedOut) {
-                btnIn.disabled = true; btnOut.disabled = true;
-                statusText.innerHTML = `✅ Shift Complete. You clocked out at <span class="fw-bold">${new Date(hasClockedOut.timestamp).toLocaleTimeString()}</span>`;
-            } else if (hasClockedIn && !hasClockedOut) {
-                btnIn.disabled = true; btnOut.disabled = false;
-                statusText.innerHTML = `🟢 Currently Clocked In. Started at <span class="fw-bold">${new Date(hasClockedIn.timestamp).toLocaleTimeString()}</span>`;
-            } else {
-                btnIn.disabled = false; btnOut.disabled = true;
-                statusText.innerHTML = `👋 Good morning! Waiting to start shift...`;
-            }
-        }
-    }
-
-    async function clock(type) {
-        const statusEl = document.getElementById('clock-status');
-        
-        statusEl.innerText = 'Verifying Network IP...';
-        const networkCheck = await checkOfficeWifi();
-        if (!networkCheck.ok) {
-            statusEl.innerText = '❌ Network Check Failed';
-            return;
-        }
-
-        statusEl.innerText = 'Verifying GPS Location...';
-        checkOfficeLocation(async function(locationOK, lat, lon) {
-            if (!locationOK) {
-                statusEl.innerText = '❌ Location Check Failed';
-                return;
-            }
-
-            // Both checks passed, disable buttons and send to DB
-            document.getElementById('btn-clock-in').disabled = true;
-            document.getElementById('btn-clock-out').disabled = true;
-            statusEl.innerText = 'Saving to database...';
-
-            const result = await apiCall({ 
-                action: 'clock', 
-                email: currentUser, 
-                clockType: type,
-                lat: lat,
-                lon: lon,
-                ip: networkCheck.ip 
-            });
-
-            if (result && result.status === 'success') {
-                statusEl.innerText = `✅ Successfully Logged: ${type}`;
-                setTimeout(() => { statusEl.innerText = ''; }, 3000);
-                loadData(); 
-            } else {
-                statusEl.innerText = '❌ Server Error';
-            }
-        });
-    }
-
-    // --- TASK FUNCTIONS ---
-    async function createTask() {
-        const name = document.getElementById('new-task-name').value;
-        const assign = document.getElementById('new-task-assign').value;
-        const notes = document.getElementById('new-task-notes').value;
-        if (!name || !assign) return alert("Task Name and Assignee are required.");
-        
-        const res = await apiCall({ action: 'createTask', name: name, assignedTo: assign, notes: notes });
-        if (res.status === 'success') {
-            document.getElementById('new-task-name').value = '';
-            document.getElementById('new-task-assign').value = '';
-            document.getElementById('new-task-notes').value = '';
+    // --- PROJECTS & TASKS ---
+    async function showNewProjectModal() {
+        const pName = prompt("Enter New Project Name:");
+        if(pName) {
+            await apiCall({ action: 'createProject', name: pName });
             loadData();
         }
     }
 
-    function renderTasks(tasks) {
-        const tbody = document.getElementById('tasks-body'); tbody.innerHTML = '';
-        tasks.forEach(task => {
-            let bColor = task.status === 'Done' ? 'bg-success' : (task.status === 'Doing' ? 'bg-warning text-dark' : 'bg-secondary');
-            tbody.innerHTML += `
-                <tr>
-                    <td><strong>${task.name}</strong><br><small class="text-muted">${task.notes}</small></td>
-                    <td><span class="badge bg-light text-dark border">${task.assignedTo}</span></td>
-                    <td><span class="badge ${bColor}">${task.status}</span></td>
-                    <td>
-                        <select onchange="updateTask('${task.id}', this.value)" class="form-select form-select-sm">
-                            <option value="">Change...</option><option value="Pending">Pending</option>
-                            <option value="Doing">Doing</option><option value="Done">Done</option>
-                        </select>
-                    </td>
-                </tr>`;
+    function renderProjectsAndTasks(projects, tasks) {
+        const container = document.getElementById('projects-container'); container.innerHTML = '';
+        const isAdmin = currentRole.toLowerCase() === 'admin';
+
+        projects.forEach(proj => {
+            // Find tasks for this project
+            const projTasks = tasks.filter(t => t.projectId == proj.id);
+            
+            // Filter visibility: Admins see all. Users see if assigned to ANY task in project.
+            let userTasks = projTasks;
+            if (!isAdmin) {
+                userTasks = projTasks.filter(t => t.assignedTo && t.assignedTo.includes(currentUser));
+                if (userTasks.length === 0) return; // Skip rendering project if no tasks assigned to user
+            }
+
+            let taskRows = '';
+            userTasks.forEach(t => {
+                let bColor = t.status === 'Done' ? 'bg-success' : (t.status === 'Doing' ? 'bg-warning text-dark' : 'bg-secondary');
+                taskRows += `
+                    <tr>
+                        <td width="30%"><strong>${t.name}</strong></td>
+                        <td width="25%"><small class="text-muted">${t.assignedTo}</small></td>
+                        <td width="15%"><span class="badge ${bColor}">${t.status}</span></td>
+                        <td width="30%">
+                            <div class="d-flex gap-2">
+                                <select onchange="updateTask('${t.id}', this.value)" class="form-select form-select-sm" style="width: 100px;">
+                                    <option value="">Update...</option><option value="Pending">Pending</option>
+                                    <option value="Doing">Doing</option><option value="Done">Done</option>
+                                </select>
+                                <button onclick="openComments('${t.id}')" class="btn btn-sm btn-outline-primary">💬 Chat</button>
+                            </div>
+                        </td>
+                    </tr>`;
+            });
+
+            container.innerHTML += `
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-white text-primary d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">📁 ${proj.name}</h5>
+                        <button onclick="openTaskModal('${proj.id}')" class="btn btn-sm btn-primary">+ Add Task</button>
+                    </div>
+                    <div class="card-body p-0 table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            ${taskRows === '' ? '<tr><td colspan="4" class="text-center text-muted py-3">No tasks yet.</td></tr>' : taskRows}
+                        </table>
+                    </div>
+                </div>`;
         });
+    }
+
+    // --- CREATE TASK WITH MULTI-SELECT ---
+    function populateUserCheckboxes(users) {
+        const container = document.getElementById('user-checkbox-container'); container.innerHTML = '';
+        users.forEach(u => {
+            container.innerHTML += `
+            <div class="form-check">
+              <input class="form-check-input user-check" type="checkbox" value="${u.name}" id="chk-${u.name}">
+              <label class="form-check-label" for="chk-${u.name}">${u.name} (${u.role})</label>
+            </div>`;
+        });
+    }
+
+    function openTaskModal(projId) {
+        document.getElementById('task-project-id').value = projId;
+        // Uncheck all boxes
+        document.querySelectorAll('.user-check').forEach(chk => chk.checked = false);
+        openModal('taskModal');
+    }
+
+    async function createTask() {
+        const pId = document.getElementById('task-project-id').value;
+        const name = document.getElementById('new-task-name').value;
+        const notes = document.getElementById('new-task-notes').value;
+        
+        // Get all checked users
+        const assignedArray = [];
+        document.querySelectorAll('.user-check:checked').forEach(chk => assignedArray.push(chk.value));
+        const assignedString = assignedArray.join(', ');
+
+        if (!name || assignedArray.length === 0) return alert("Task Name and at least one Assignee are required.");
+        
+        closeModal('taskModal');
+        await apiCall({ action: 'createTask', projectId: pId, name: name, assignedTo: assignedString, notes: notes });
+        loadData();
     }
 
     async function updateTask(id, status) {
         if(status) { await apiCall({ action: 'updateTask', taskId: id, newStatus: status }); loadData(); }
     }
 
-    // --- INVENTORY FUNCTIONS ---
-    async function saveInventory() {
-        const item = document.getElementById('inv-item').value;
-        const stock = document.getElementById('inv-stock').value;
-        const status = document.getElementById('inv-status').value;
-        if (!item || !stock) return alert("Item and Stock amount required.");
+    // --- COMMENTS SYSTEM ---
+    function openComments(taskId) {
+        const task = globalData.tasks.find(t => t.id == taskId);
+        if(!task) return;
 
-        const res = await apiCall({ action: 'saveInventory', item: item, stock: stock, status: status });
-        if (res.status === 'success') {
-            document.getElementById('inv-item').value = ''; document.getElementById('inv-stock').value = '';
-            loadData();
+        document.getElementById('active-comment-task-id').value = taskId;
+        document.getElementById('comment-task-title').innerText = "💬 " + task.name;
+        document.getElementById('comment-task-assignees').innerText = task.assignedTo;
+        document.getElementById('comment-task-notes').innerText = task.notes;
+
+        renderChatHistory(taskId);
+        openModal('commentsModal');
+    }
+
+    function renderChatHistory(taskId) {
+        const chatBox = document.getElementById('chat-history'); chatBox.innerHTML = '';
+        const taskComments = globalData.comments.filter(c => c.taskId == taskId);
+
+        if(taskComments.length === 0) {
+            chatBox.innerHTML = '<p class="text-center text-muted">No comments yet. Start the conversation!</p>';
+            return;
         }
-    }
 
-    function renderInventory(inventory) {
-        const tbody = document.getElementById('inventory-body'); tbody.innerHTML = '';
-        inventory.forEach(inv => {
-            const isLow = inv.status.toLowerCase().includes('buy');
-            tbody.innerHTML += `
-                <tr class="${isLow ? 'table-danger' : ''}">
-                    <td class="fw-bold">${inv.item}</td><td>${inv.inStock}</td>
-                    <td>${isLow ? '⚠️ Needs Buying' : '✅ Good'}</td>
-                </tr>`;
+        taskComments.forEach(c => {
+            const isMe = c.author === currentUser;
+            const bubbleClass = isMe ? 'chat-mine' : 'chat-other';
+            const align = isMe ? 'align-items-end' : 'align-items-start';
+            const time = new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            chatBox.innerHTML += `
+            <div class="msg-wrapper ${align}">
+                <small class="text-muted" style="font-size: 0.7rem;">${c.author} • ${time}</small>
+                <div class="chat-bubble ${bubbleClass}">${c.text}</div>
+            </div>`;
         });
+        chatBox.scrollTop = chatBox.scrollHeight; // Scroll to bottom
     }
 
-    // --- ADMIN USER FUNCTIONS ---
+    async function addComment() {
+        const taskId = document.getElementById('active-comment-task-id').value;
+        const textObj = document.getElementById('new-comment-text');
+        const text = textObj.value.trim();
+        
+        if(!text) return;
+        textObj.value = 'Sending...'; textObj.disabled = true;
+
+        await apiCall({ action: 'addComment', taskId: taskId, author: currentUser, text: text });
+        
+        textObj.value = ''; textObj.disabled = false;
+        await loadData(); // Reload background data
+        renderChatHistory(taskId); // Update active chat window
+    }
+
+    // --- ADMIN SYSTEM ---
     function renderUsers(users) {
         const tbody = document.getElementById('users-body'); tbody.innerHTML = '';
         users.forEach(u => {
-            if(!u.email) return;
+            if(!u.name) return;
             tbody.innerHTML += `
                 <tr>
-                    <td class="fw-bold">${u.email}</td><td><span class="badge bg-info text-dark">${u.role}</span></td>
+                    <td class="fw-bold">${u.name}</td>
+                    <td><small>${u.email || 'N/A'}</small></td>
+                    <td><span class="badge bg-info text-dark">${u.role}</span></td>
                     <td>
-                        <select onchange="updateRole('${u.email}', this.value)" class="form-select form-select-sm" style="max-width:150px;">
+                        <select onchange="updateRole('${u.name}', this.value)" class="form-select form-select-sm" style="max-width:150px;">
                             <option value="">Change Role...</option><option value="Admin">Admin</option><option value="User">User</option>
                         </select>
                     </td>
@@ -446,12 +430,99 @@
         });
     }
 
-    async function updateRole(email, newRole) {
+    async function updateRole(name, newRole) {
         if (!newRole) return;
-        if (confirm(`Make ${email} a ${newRole}?`)) {
-            await apiCall({ action: 'updateRole', targetEmail: email, newRole: newRole }); loadData();
+        if (confirm(`Make ${name} a ${newRole}?`)) {
+            await apiCall({ action: 'updateRole', targetName: name, newRole: newRole }); loadData();
         }
     }
+
+    // --- INVENTORY ---
+    async function saveInventory() {
+        const item = document.getElementById('inv-item').value;
+        const stock = document.getElementById('inv-stock').value;
+        const status = document.getElementById('inv-status').value;
+        if (!item || !stock) return alert("Item and Stock required.");
+        await apiCall({ action: 'saveInventory', item: item, stock: stock, status: status });
+        document.getElementById('inv-item').value = ''; document.getElementById('inv-stock').value = '';
+        loadData();
+    }
+
+    function renderInventory(inventory) {
+        const tbody = document.getElementById('inventory-body'); tbody.innerHTML = '';
+        inventory.forEach(inv => {
+            const isLow = inv.status.toLowerCase().includes('buy');
+            tbody.innerHTML += `<tr class="${isLow ? 'table-danger' : ''}"><td class="fw-bold">${inv.item}</td><td>${inv.inStock}</td><td>${isLow ? '⚠️ Needs Buying' : '✅ Good'}</td></tr>`;
+        });
+    }
+
+    // --- ATTENDANCE & SECURITY ---
+    async function checkOfficeWifi() {
+        try {
+            const res = await fetch("https://api.ipify.org?format=json"); const data = await res.json();
+            if(data.ip === OFFICE_IP) return { ok: true, ip: data.ip };
+            alert("Security Alert: Connect to office WiFi."); return { ok: false, ip: data.ip };
+        } catch(err){ alert("Network check failed."); return { ok: false, ip: "Error" }; }
+    }
+
+    function getDistance(lat1, lon1, lat2, lon2){
+        const R = 6371e3; const φ1 = lat1*Math.PI/180; const φ2 = lat2*Math.PI/180;
+        const Δφ = (lat2-lat1)*Math.PI/180; const Δλ = (lon2-lon1)*Math.PI/180;
+        const a = Math.sin(Δφ/2)*Math.sin(Δφ/2) + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)*Math.sin(Δλ/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function checkOfficeLocation(callback) {
+        if (!navigator.geolocation) { alert("GPS not supported."); return callback(false, null, null); }
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            const lat = pos.coords.latitude; const lon = pos.coords.longitude;
+            const distance = getDistance(lat, lon, OFFICE_LAT, OFFICE_LON);
+            if(distance <= ALLOWED_DISTANCE) callback(true, lat, lon);
+            else { alert(`Alert: You are ${Math.round(distance)}m away. Must be at office.`); callback(false, lat, lon); }
+        }, () => { alert("Location permission required."); callback(false, null, null); }, { enableHighAccuracy: true });
+    }
+
+    function renderAttendance(attendance) {
+        if (!attendance) attendance = [];
+        if (currentRole.toLowerCase() === 'admin') {
+            document.getElementById('user-attendance-view').classList.add('hidden');
+            document.getElementById('admin-attendance-view').classList.remove('hidden');
+            const tbody = document.getElementById('admin-attendance-body'); tbody.innerHTML = '';
+            [...attendance].reverse().forEach(log => {
+                if(!log.timestamp) return; 
+                tbody.innerHTML += `<tr><td><small>${new Date(log.timestamp).toLocaleString()}</small></td><td class="fw-bold">${log.name}</td><td><span class="badge ${log.action === 'Clock In'?'bg-success':'bg-danger'}">${log.action}</span></td><td><small class="text-muted">${log.ip||'N/A'}</small></td><td><small class="text-muted">${log.lat?log.lat+','+log.lon:'N/A'}</small></td></tr>`;
+            });
+        } else {
+            document.getElementById('admin-attendance-view').classList.add('hidden');
+            document.getElementById('user-attendance-view').classList.remove('hidden');
+            const today = new Date().toDateString();
+            const myLogs = attendance.filter(log => log.timestamp && log.name && log.name.toLowerCase() === currentUser.toLowerCase() && new Date(log.timestamp).toDateString() === today);
+            const hasIn = myLogs.find(log => log.action === 'Clock In');
+            const hasOut = myLogs.find(log => log.action === 'Clock Out');
+            const btnIn = document.getElementById('btn-clock-in'); const btnOut = document.getElementById('btn-clock-out');
+            const statusText = document.getElementById('attendance-status-text');
+
+            if (hasIn && hasOut) { btnIn.disabled = true; btnOut.disabled = true; statusText.innerHTML = `✅ Shift Complete. Out at <span class="fw-bold">${new Date(hasOut.timestamp).toLocaleTimeString()}</span>`; }
+            else if (hasIn && !hasOut) { btnIn.disabled = true; btnOut.disabled = false; statusText.innerHTML = `🟢 Clocked In. Started at <span class="fw-bold">${new Date(hasIn.timestamp).toLocaleTimeString()}</span>`; }
+            else { btnIn.disabled = false; btnOut.disabled = true; statusText.innerHTML = `👋 Good morning!`; }
+        }
+    }
+
+    async function clock(type) {
+        const statusEl = document.getElementById('clock-status');
+        statusEl.innerText = 'Verifying Network...';
+        const net = await checkOfficeWifi(); if (!net.ok) { statusEl.innerText = '❌ Network Failed'; return; }
+        statusEl.innerText = 'Verifying GPS...';
+        checkOfficeLocation(async function(locOK, lat, lon) {
+            if (!locOK) { statusEl.innerText = '❌ Location Failed'; return; }
+            document.getElementById('btn-clock-in').disabled = true; document.getElementById('btn-clock-out').disabled = true;
+            statusEl.innerText = 'Saving...';
+            const res = await apiCall({ action: 'clock', name: currentUser, clockType: type, lat: lat, lon: lon, ip: net.ip });
+            if (res && res.status === 'success') { statusEl.innerText = `✅ Logged: ${type}`; setTimeout(() => { statusEl.innerText = ''; }, 3000); loadData(); } 
+            else { statusEl.innerText = '❌ Error'; }
+        });
+    }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
