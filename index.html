@@ -267,6 +267,10 @@
         
         if (result && result.status === 'success') {
             currentUser = result.name; currentRole = result.role;
+            
+            localStorage.setItem('teamPortalUser', currentUser);
+            localStorage.setItem('teamPortalRole', currentRole);
+
             document.getElementById('user-badge').innerText = `${currentUser} (${currentRole})`;
             
             if (currentRole.toLowerCase() === 'admin') {
@@ -283,8 +287,29 @@
         }
     }
 
-    function logout() { location.reload(); }
+    function logout() { 
+        localStorage.removeItem('teamPortalUser');
+        localStorage.removeItem('teamPortalRole');
+        location.reload(); 
+    }
 
+    window.onload = function() {
+        const savedUser = localStorage.getItem('teamPortalUser');
+        const savedRole = localStorage.getItem('teamPortalRole');
+        
+        if (savedUser && savedRole) {
+            currentUser = savedUser; currentRole = savedRole;
+            document.getElementById('user-badge').innerText = `${currentUser} (${currentRole})`;
+            
+            if (currentRole.toLowerCase() === 'admin') {
+                document.getElementById('nav-admin-wrapper').classList.remove('hidden');
+                document.getElementById('btn-new-project').classList.remove('hidden');
+            }
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+            showPage('projects'); loadData();
+        }
+    };
     async function loadData() {
         const result = await apiCall({ action: 'getData' });
         if (result && result.status === 'success') {
@@ -601,13 +626,25 @@
     }
 
     function checkOfficeLocation(callback) {
-        if (!navigator.geolocation) { alert("GPS not supported."); return callback(false, null, null); }
-        navigator.geolocation.getCurrentPosition(function(pos) {
-            const lat = pos.coords.latitude; const lon = pos.coords.longitude;
-            const distance = getDistance(lat, lon, OFFICE_LAT, OFFICE_LON);
-            if(distance <= ALLOWED_DISTANCE) callback(true, lat, lon);
-            else { alert(`Alert: You are ${Math.round(distance)}m away. Must be at office.`); callback(false, lat, lon); }
-        }, () => { alert("Location permission required."); callback(false, null, null); }, { enableHighAccuracy: true });
+        if (!navigator.geolocation) { 
+            return callback(false, null, null, "GPS not supported. Please use a mobile device."); 
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                const lat = pos.coords.latitude; const lon = pos.coords.longitude;
+                const distance = getDistance(lat, lon, OFFICE_LAT, OFFICE_LON);
+                if(distance <= ALLOWED_DISTANCE) callback(true, lat, lon, "OK");
+                else { callback(false, lat, lon, `Too far (${Math.round(distance)}m). Must be at office.`); }
+            }, 
+            function(err) { 
+                let msg = "GPS unavailable. Please use a mobile phone with location turned on.";
+                if(err.code === 1) msg = "Permission denied. Allow location access.";
+                if(err.code === 3) msg = "GPS timed out. Try stepping outside or use your mobile phone.";
+                callback(false, null, null, msg); 
+            }, 
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 } 
+        );
     }
 
     function renderAttendance(attendance) {
@@ -639,15 +676,20 @@
     async function clock(type) {
         const statusEl = document.getElementById('clock-status');
         statusEl.innerText = 'Verifying Network...';
-        const net = await checkOfficeWifi(); if (!net.ok) { statusEl.innerText = '❌ Network Failed'; return; }
-        statusEl.innerText = 'Verifying GPS...';
-        checkOfficeLocation(async function(locOK, lat, lon) {
-            if (!locOK) { statusEl.innerText = '❌ Location Failed'; return; }
+        const net = await checkOfficeWifi(); 
+        if (!net.ok) { statusEl.innerText = '❌ Network Failed. Connect to Office WiFi.'; return; }
+        
+        statusEl.innerText = 'Verifying GPS (This may take a few seconds)...';
+        checkOfficeLocation(async function(locOK, lat, lon, errorMsg) {
+            if (!locOK) { 
+                statusEl.innerText = '❌ ' + errorMsg; 
+                return; 
+            }
             document.getElementById('btn-clock-in').disabled = true; document.getElementById('btn-clock-out').disabled = true;
             statusEl.innerText = 'Saving...';
             const res = await apiCall({ action: 'clock', name: currentUser, clockType: type, lat: lat, lon: lon, ip: net.ip });
             if (res && res.status === 'success') { statusEl.innerText = `✅ Logged: ${type}`; setTimeout(() => { statusEl.innerText = ''; }, 3000); loadData(); } 
-            else { statusEl.innerText = '❌ Error'; }
+            else { statusEl.innerText = '❌ Error saving to database.'; }
         });
     }
 </script>
