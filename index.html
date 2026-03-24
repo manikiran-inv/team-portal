@@ -300,8 +300,6 @@
     // --- USER MANAGEMENT (ADD, EDIT, PASSWORD GEN) ---
 
     function openUserModal(userNameToEdit = null) {
-        document.getElementById('user-password').value = ''; // Always clear password field on open
-        
         if (userNameToEdit) {
             // EDIT MODE
             const user = globalData.users.find(u => u.name === userNameToEdit);
@@ -312,7 +310,8 @@
             document.getElementById('user-name').value = user.name;
             document.getElementById('user-email').value = user.email || '';
             document.getElementById('user-role').value = user.role;
-            document.getElementById('user-password-hint').innerText = "(Leave blank to keep current password)";
+            document.getElementById('user-password').value = user.password || ''; 
+            document.getElementById('user-password-hint').innerText = "(Edit to change, or leave as is)";
         } else {
             // ADD MODE
             document.getElementById('userModalTitle').innerText = "Add New User";
@@ -320,6 +319,7 @@
             document.getElementById('user-name').value = "";
             document.getElementById('user-email').value = "";
             document.getElementById('user-role').value = "User";
+            document.getElementById('user-password').value = ""; 
             document.getElementById('user-password-hint').innerText = "(Required)";
         }
         openModal('userModal');
@@ -334,10 +334,22 @@
 
     function copyPassword() {
         const pwdInput = document.getElementById('user-password');
-        if (!pwdInput.value) return alert("Generate a password first.");
+
+        const isEditMode = document.getElementById('user-original-name').value !== "";
+
+        if (!pwdInput.value) {
+            return alert("No password to copy! Please generate or type one first.");
+        }
+        
         pwdInput.select();
         navigator.clipboard.writeText(pwdInput.value)
-            .then(() => alert("Password copied to clipboard!"))
+            .then(() => {
+                if (isEditMode) {
+                    alert("Copied existing password!");
+                } else {
+                    alert("Password copied to clipboard!");
+                }
+            })
             .catch(err => alert("Failed to copy. Please copy manually."));
     }
 
